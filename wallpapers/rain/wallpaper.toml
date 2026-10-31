@@ -1,0 +1,4 @@
+name = "rain"
+kind = "shader"
+entry = "rain.wgsl"
+fps = 15

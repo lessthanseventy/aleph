@@ -1,0 +1,17 @@
+[package]
+name = "aleph"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = "1.0.104"
+bytemuck = { version = "1.25.2", features = ["derive"] }
+png = "0.18.1"
+pollster = "1.0.1"
+raw-window-handle = "0.6.2"
+serde = { version = "1.0.229", features = ["derive"] }
+smithay-client-toolkit = "0.21.1"
+toml = "1.1.8"
+wayland-backend = { version = "0.3.17", features = ["client_system"] }
+wayland-client = "0.31.15"
+wgpu = "30.0.1"
