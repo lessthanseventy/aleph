@@ -8,10 +8,22 @@ bin=target/x86_64-unknown-linux-gnu/release/aleph
 mkdir -p .out
 "$sniper/run" -- "$bin" render wallpapers/rain .out/rain-sniper.png --size 1280x720 --time 20
 echo "render in sniper: .out/rain-sniper.png"
+# the container takes seconds to start: 15 s in all, and the layer must map within them
+timeout 15 "$sniper/run" -- "$bin" run wallpapers/rain &
+pid=$!
+# Hyprland can say whether the layer mapped; elsewhere, staying up to the timeout is the proof
+if command -v hyprctl >/dev/null; then
+  mapped=
+  for _ in $(seq 24); do
+    sleep 0.5
+    hyprctl layers | grep -q 'namespace: aleph' && { mapped=1; break; }
+  done
+  [ -n "$mapped" ] || { echo "no aleph layer mapped from sniper in 12 s" >&2; exit 1; }
+fi
 set +e
-timeout 5 "$sniper/run" -- "$bin" run wallpapers/rain
+wait "$pid"
 code=$?
 set -e
-# 124 is timeout ending it: the layer ran for the whole 5 s
+# 124 is timeout ending it: the layer ran the whole time
 [ "$code" = 124 ] || { echo "aleph run in sniper exited $code" >&2; exit 1; }
-echo "live layer in sniper: ran 5 s"
+echo "live layer in sniper: mapped, ran to the timeout"
