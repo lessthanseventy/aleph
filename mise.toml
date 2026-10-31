@@ -11,11 +11,11 @@ run = "cargo test"
 
 [tasks.check]
 description = "The gate before a commit: format, clippy with warnings as errors, the suite, the desktop test"
-run = ["cargo fmt --check", "cargo clippy --all-targets -- -D warnings", "cargo test", "cargo build -q --release", "scripts/desktop-test.sh"]
+run = ["cargo fmt --check", "cargo clippy --all-targets -- -D warnings", "cargo test", "cargo build -q --release", "scripts/desktop-test.sh", "scripts/dev-test.sh"]
 
 [tasks."test:desktop"]
-description = "aleph run on a headless Sway: frames flow when visible, stop under a fullscreen window"
-run = ["cargo build -q --release", "scripts/desktop-test.sh"]
+description = "aleph on a headless Sway: frames stop under a fullscreen window; dev reloads on save"
+run = ["cargo build -q --release", "scripts/desktop-test.sh", "scripts/dev-test.sh"]
 
 [tasks.render]
 description = "One frame of a wallpaper to .out/NAME.png (mise run render -- rain)"

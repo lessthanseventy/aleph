@@ -1,6 +1,7 @@
 use anyhow::{Context, Result, bail};
 use serde::Deserialize;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::time::SystemTime;
 
 /// A wallpaper is a folder: `wallpaper.toml` and the files it names. That folder is also what a
 /// Workshop item holds.
@@ -19,10 +20,19 @@ fn default_fps() -> f32 {
 }
 
 pub struct Wallpaper {
+    pub dir: PathBuf,
     pub name: String,
     pub fps: f32,
     /// The whole WGSL module: the preamble, then the wallpaper's own source.
     pub source: String,
+}
+
+/// When the folder's newest file last changed: a different answer means reload.
+pub fn stamp(dir: &Path) -> Option<SystemTime> {
+    std::fs::read_dir(dir)
+        .ok()?
+        .filter_map(|e| e.ok()?.metadata().ok()?.modified().ok())
+        .max()
 }
 
 pub fn load(dir: &Path) -> Result<Wallpaper> {
@@ -42,6 +52,7 @@ pub fn load(dir: &Path) -> Result<Wallpaper> {
     let entry = dir.join(&m.entry);
     let own = std::fs::read_to_string(&entry).with_context(|| format!("reading {}", entry.display()))?;
     Ok(Wallpaper {
+        dir: dir.to_path_buf(),
         name: m.name,
         fps: m.fps,
         source: format!("{}\n{}", include_str!("preamble.wgsl"), own),

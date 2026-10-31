@@ -5,6 +5,8 @@ use std::path::PathBuf;
 const USAGE: &str = "usage:
   aleph run WALLPAPER_DIR
       the wallpaper behind every output, until killed
+  aleph dev WALLPAPER_DIR
+      the wallpaper in a window, reloaded on every save; a shader error keeps the last good one
   aleph render WALLPAPER_DIR OUT.png [--size WxH] [--time SECONDS] [--seed N]
       one frame, headless (previews, Workshop images, tests)";
 
@@ -18,6 +20,7 @@ fn main() {
 fn cli(args: Vec<String>) -> Result<()> {
     match args.iter().map(String::as_str).collect::<Vec<_>>().as_slice() {
         ["run", dir] => desktop::run(wallpaper::load(&PathBuf::from(dir))?),
+        ["dev", dir] => desktop::dev(wallpaper::load(&PathBuf::from(dir))?),
         ["render", dir, out, rest @ ..] => {
             let (mut w, mut h, mut time, mut seed) = (1920, 1080, 10.0, 0.0);
             let mut it = rest.iter();
