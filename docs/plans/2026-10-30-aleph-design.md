@@ -63,6 +63,31 @@ One Rust binary, `aleph`.
   maintained binding (`steamworks` crate). It's also one static-ish binary that the Steam runtime
   can carry.
 
+## 4a. aleph studio: making wallpapers
+
+Most Wallpaper Engine creators are not programmers: they take an image and layer effects in the
+editor. The tools come in this order:
+
+1. `aleph dev DIR`: a preview window that reloads on save and shows shader errors in place.
+   Creators keep their own editor.
+2. Parameters: `wallpaper.toml` declares knobs (colours, speed, density), and they become
+   sliders for users.
+3. Templates: an image plus an effect (rain on glass, parallax, ripple, particles), no code.
+4. The scene editor: layers, effects and particles on a canvas (S7).
+5. Publish: a Workshop upload with the `render` image as its preview.
+
+The studio is egui on the same wgpu renderer, so the preview *is* the engine.
+
+## 4b. Wallpaper Engine libraries
+
+People leaving Windows own Wallpaper Engine libraries. Their subscribed items are on disk at
+`steamapps/workshop/content/431960/`. aleph plays the **video** items there in place, never
+copied or uploaded. Scene items (`scene.pkg`, Wallpaper Engine's own shader dialect and scripting)
+and web items are listed as unsupported. This helps migration, but it does not seed aleph's
+Workshop: the items and their creators stay on Wallpaper Engine's. *Open (the human's): whether to
+market it; ask Valve first.* Our own Workshop is seeded by the first-party pack, CC0/MIT shader
+imports, the studio, and possibly commissioned launch wallpapers.
+
 ## 5. Steam
 
 - **Runtime:** the binary runs inside Steam Linux Runtime 3 ("sniper", Debian 11, glibc 2.31).
@@ -82,8 +107,8 @@ One Rust binary, `aleph`.
 | | Ships | Proven by |
 |-|-|-|
 | S1 | shader kind; `run` on the layer shell, every output, frame-callback driven; `render` to PNG; first-party `rain`; the sniper check | `cargo test` (golden render); sniper run; grim screenshot of the live layer |
-| S2 | feedback pass; Lorenz port; fps cap; config file with a wallpaper per output; fullscreen pause measured | frame counter under a fullscreen window |
-| S3 | video kind | 4K loop CPU/GPU budget |
+| S2 | fullscreen pause (done); `aleph dev`; feedback pass; Lorenz port; config with a wallpaper per output, `aleph set` | `test:desktop` on headless Sway |
+| S3 | video kind; Wallpaper Engine video import | 4K loop CPU/GPU budget |
 | S4 | picker UI + socket control | |
 | S5 | KDE/Deck verified, X11, GNOME extension | runs on a Deck |
 | S6 | Steamworks: app, depot built in sniper, Workshop subscribe + upload | Workshop round trip |

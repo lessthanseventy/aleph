@@ -1,4 +1,5 @@
 use crate::gpu::{self, Renderer, Target, Uniforms};
+use crate::toplevels::Toplevels;
 use crate::wallpaper::Wallpaper;
 use anyhow::{Context, Result};
 use raw_window_handle::{RawDisplayHandle, RawWindowHandle, WaylandDisplayHandle, WaylandWindowHandle};
@@ -18,9 +19,13 @@ use smithay_client_toolkit::{
 use std::ptr::NonNull;
 use std::time::{Duration, Instant};
 use wayland_client::{
-    Connection, Proxy, QueueHandle,
+    Connection, Dispatch, Proxy, QueueHandle, event_created_child,
     globals::registry_queue_init,
     protocol::{wl_output, wl_surface},
+};
+use wayland_protocols_wlr::foreign_toplevel::v1::client::{
+    zwlr_foreign_toplevel_handle_v1::{self as handle, ZwlrForeignToplevelHandleV1},
+    zwlr_foreign_toplevel_manager_v1::{self as manager, ZwlrForeignToplevelManagerV1},
 };
 
 /// The wallpaper as the background layer of every output, until killed. Frames are paced by the
@@ -41,6 +46,10 @@ pub fn run(wp: Wallpaper) -> Result<()> {
         start: Instant::now(),
         screens: Vec::new(),
         seeds: 0,
+        stats: std::env::var_os("ALEPH_STATS").is_some(),
+        toplevels: Toplevels::default(),
+        // without it (KDE, GNOME), every output draws whatever covers it
+        _toplevel_manager: globals.bind::<ZwlrForeignToplevelManagerV1, _, _>(&qh, 1..=3, ()).ok(),
     };
     loop {
         queue.blocking_dispatch(&mut app)?;
@@ -55,6 +64,7 @@ struct Gpu {
 }
 
 struct Screen {
+    name: String,
     output: wl_output::WlOutput,
     // dropped before `layer`: the wgpu surface draws into the layer's wl_surface
     surface: wgpu::Surface<'static>,
@@ -64,6 +74,10 @@ struct Screen {
     scale: i32,
     seed: f32,
     last: Option<Instant>,
+    /// a focused fullscreen window covers the output: no frames, no frame callbacks
+    paused: bool,
+    /// a frame callback is asked for and has not come; never two in flight
+    waiting: bool,
 }
 
 struct App {
@@ -78,6 +92,10 @@ struct App {
     start: Instant,
     screens: Vec<Screen>,
     seeds: u32,
+    /// ALEPH_STATS set: a stderr line per frame drawn, for measuring what a wallpaper costs
+    stats: bool,
+    toplevels: Toplevels,
+    _toplevel_manager: Option<ZwlrForeignToplevelManagerV1>,
 }
 
 impl App {
@@ -136,14 +154,37 @@ impl App {
         Ok(())
     }
 
+    /// Pause the outputs a focused fullscreen window now covers; restart the ones it left.
+    fn recheck(&mut self, qh: &QueueHandle<Self>) {
+        for i in 0..self.screens.len() {
+            let s = &mut self.screens[i];
+            let covered = self.toplevels.covers(&s.output);
+            if covered == s.paused {
+                continue;
+            }
+            s.paused = covered;
+            if self.stats {
+                eprintln!("aleph: {} {}", if covered { "paused" } else { "resumed" }, s.name);
+            }
+            if !covered && !s.waiting && s.target.is_some() {
+                s.last = None;
+                self.tick(i, qh);
+            }
+        }
+    }
+
     /// Draw output `i` if the wallpaper has moved on since its last frame; either way ask for the
-    /// next frame callback.
+    /// next frame callback. A paused output asks for none, so it costs no wakeups at all.
     fn tick(&mut self, i: usize, qh: &QueueHandle<Self>) {
         let step = Duration::from_secs_f32(1.0 / self.wp.fps);
         let now = Instant::now();
         let s = &mut self.screens[i];
+        if s.paused {
+            return;
+        }
         let wl = s.layer.wl_surface().clone();
         wl.frame(qh, FrameCallbackData(wl.clone()));
+        s.waiting = true;
         if s.last.is_some_and(|l| now - l < step) {
             wl.commit();
             return;
@@ -175,6 +216,9 @@ impl App {
         );
         g.queue.submit([enc.finish()]);
         g.queue.present(frame);
+        if self.stats {
+            eprintln!("aleph: frame {}", s.name);
+        }
     }
 }
 
@@ -213,9 +257,12 @@ impl OutputHandler for App {
             Ok(s) => s,
             Err(e) => return eprintln!("aleph: no GPU surface for an output: {e}"),
         };
-        let scale = self.outputs.info(&output).map_or(1, |i| i.scale_factor);
+        let info = self.outputs.info(&output);
+        let scale = info.as_ref().map_or(1, |i| i.scale_factor);
+        let name = info.and_then(|i| i.name).unwrap_or_else(|| "?".into());
         self.seeds += 1;
         self.screens.push(Screen {
+            name,
             output,
             surface,
             layer,
@@ -224,6 +271,8 @@ impl OutputHandler for App {
             scale,
             seed: self.seeds as f32 * 17.31,
             last: None,
+            paused: false,
+            waiting: false,
         });
     }
 
@@ -285,6 +334,7 @@ impl CompositorHandler for App {
 
     fn frame(&mut self, _: &Connection, qh: &QueueHandle<Self>, s: &wl_surface::WlSurface, _: u32) {
         if let Some(i) = self.screen(s) {
+            self.screens[i].waiting = false;
             self.tick(i, qh);
         }
     }
@@ -305,6 +355,38 @@ impl CompositorHandler for App {
         _: &wl_surface::WlSurface,
         _: &wl_output::WlOutput,
     ) {
+    }
+}
+
+impl Dispatch<ZwlrForeignToplevelManagerV1, ()> for App {
+    fn event(
+        app: &mut Self,
+        _: &ZwlrForeignToplevelManagerV1,
+        ev: manager::Event,
+        _: &(),
+        _: &Connection,
+        _: &QueueHandle<Self>,
+    ) {
+        if let manager::Event::Toplevel { toplevel } = ev {
+            app.toplevels.add(toplevel);
+        }
+    }
+
+    event_created_child!(App, ZwlrForeignToplevelManagerV1, [manager::EVT_TOPLEVEL_OPCODE => (ZwlrForeignToplevelHandleV1, ())]);
+}
+
+impl Dispatch<ZwlrForeignToplevelHandleV1, ()> for App {
+    fn event(
+        app: &mut Self,
+        h: &ZwlrForeignToplevelHandleV1,
+        ev: handle::Event,
+        _: &(),
+        _: &Connection,
+        qh: &QueueHandle<Self>,
+    ) {
+        if app.toplevels.event(h, ev) {
+            app.recheck(qh);
+        }
     }
 }
 

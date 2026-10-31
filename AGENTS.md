@@ -8,7 +8,10 @@ with), `src/gpu.rs` (the one renderer both share). The design and its phases are
 ## Law
 
 - **Free when unseen.** Frames come from the compositor's frame callbacks and are capped at the
-  wallpaper's `fps`. Never a timer loop. A change that costs idle GPU or CPU needs a measurement.
+  wallpaper's `fps`. Never a timer loop. Not every compositor stops a covered layer's callbacks,
+  so an output whose focused window is fullscreen (wlr-foreign-toplevel, `src/toplevels.rs`)
+  asks for none. `mise run test:desktop` proves both on a headless Sway. A change that costs
+  idle GPU or CPU needs a measurement (`ALEPH_STATS=1` logs every frame drawn).
 - **The GPU is the integrated one** (`gpu::adapter_options`). A wallpaper never wakes a discrete
   card.
 - **One GPU device per process.** Creating Vulkan instances on several threads at once crashes

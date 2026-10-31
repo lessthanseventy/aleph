@@ -14,4 +14,5 @@ smithay-client-toolkit = { version = "0.21.1", default-features = false }
 toml = "1.1.8"
 wayland-backend = { version = "0.3.17", features = ["client_system"] }
 wayland-client = "0.31.15"
+wayland-protocols-wlr = { version = "0.3.12", features = ["client"] }
 wgpu = "30.0.1"
