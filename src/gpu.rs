@@ -85,19 +85,32 @@ impl Renderer {
         let bind = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: None,
             layout: &self.layout,
-            entries: &[wgpu::BindGroupEntry { binding: 0, resource: uniforms.as_entire_binding() }],
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: uniforms.as_entire_binding(),
+            }],
         });
         Target { uniforms, bind }
     }
 
-    pub fn draw(&self, queue: &wgpu::Queue, encoder: &mut wgpu::CommandEncoder, view: &wgpu::TextureView, t: &Target, u: Uniforms) {
+    pub fn draw(
+        &self,
+        queue: &wgpu::Queue,
+        encoder: &mut wgpu::CommandEncoder,
+        view: &wgpu::TextureView,
+        t: &Target,
+        u: Uniforms,
+    ) {
         queue.write_buffer(&t.uniforms, 0, bytemuck::bytes_of(&u));
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                 view,
                 depth_slice: None,
                 resolve_target: None,
-                ops: wgpu::Operations { load: wgpu::LoadOp::Clear(wgpu::Color::BLACK), store: wgpu::StoreOp::Store },
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                    store: wgpu::StoreOp::Store,
+                },
             })],
             ..Default::default()
         });
@@ -113,7 +126,11 @@ pub fn instance() -> wgpu::Instance {
 
 /// The integrated GPU where there is one: a wallpaper should never wake a discrete card.
 pub fn adapter_options<'a>(surface: Option<&'a wgpu::Surface<'a>>) -> wgpu::RequestAdapterOptions<'a, 'a> {
-    wgpu::RequestAdapterOptions { power_preference: wgpu::PowerPreference::LowPower, compatible_surface: surface, ..Default::default() }
+    wgpu::RequestAdapterOptions {
+        power_preference: wgpu::PowerPreference::LowPower,
+        compatible_surface: surface,
+        ..Default::default()
+    }
 }
 
 pub fn device(adapter: &wgpu::Adapter) -> Result<(wgpu::Device, wgpu::Queue)> {

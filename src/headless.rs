@@ -22,13 +22,25 @@ impl Headless {
     }
 }
 
-fn frame(device: &wgpu::Device, queue: &wgpu::Queue, wp: &Wallpaper, w: u32, h: u32, time: f32, seed: f32) -> Result<Vec<u8>> {
+fn frame(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    wp: &Wallpaper,
+    w: u32,
+    h: u32,
+    time: f32,
+    seed: f32,
+) -> Result<Vec<u8>> {
     let format = wgpu::TextureFormat::Rgba8Unorm;
     let r = Renderer::new(device, wp, format)?;
     let target = r.target(device);
     let tex = device.create_texture(&wgpu::TextureDescriptor {
         label: None,
-        size: wgpu::Extent3d { width: w, height: h, depth_or_array_layers: 1 },
+        size: wgpu::Extent3d {
+            width: w,
+            height: h,
+            depth_or_array_layers: 1,
+        },
         mip_level_count: 1,
         sample_count: 1,
         dimension: wgpu::TextureDimension::D2,
@@ -45,12 +57,26 @@ fn frame(device: &wgpu::Device, queue: &wgpu::Queue, wp: &Wallpaper, w: u32, h: 
     });
     let mut enc = device.create_command_encoder(&Default::default());
     let view = tex.create_view(&Default::default());
-    r.draw(queue, &mut enc, &view, &target, Uniforms { res: [w as f32, h as f32], time, seed });
+    r.draw(
+        queue,
+        &mut enc,
+        &view,
+        &target,
+        Uniforms {
+            res: [w as f32, h as f32],
+            time,
+            seed,
+        },
+    );
     enc.copy_texture_to_buffer(
         tex.as_image_copy(),
         wgpu::TexelCopyBufferInfo {
             buffer: &buf,
-            layout: wgpu::TexelCopyBufferLayout { offset: 0, bytes_per_row: Some(stride), rows_per_image: None },
+            layout: wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(stride),
+                rows_per_image: None,
+            },
         },
         tex.size(),
     );
@@ -60,7 +86,11 @@ fn frame(device: &wgpu::Device, queue: &wgpu::Queue, wp: &Wallpaper, w: u32, h: 
     device.poll(wgpu::PollType::wait_indefinitely())?;
     rx.recv()?.map_err(|e| anyhow!("reading the frame back: {e}"))?;
     let mapped = buf.slice(..).get_mapped_range()?;
-    Ok(mapped.chunks(stride as usize).flat_map(|row| &row[..(w * 4) as usize]).copied().collect())
+    Ok(mapped
+        .chunks(stride as usize)
+        .flat_map(|row| &row[..(w * 4) as usize])
+        .copied()
+        .collect())
 }
 
 pub fn write_png(path: &std::path::Path, w: u32, h: u32, rgba: &[u8]) -> Result<()> {

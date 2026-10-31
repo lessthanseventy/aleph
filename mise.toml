@@ -1,0 +1,31 @@
+# aleph — the dev loop. The human and any agent run the same tasks.
+
+[tools]
+rust = "stable"
+zig = "0.15.2"
+"cargo:cargo-zigbuild" = "latest"
+
+[tasks.test]
+description = "The suite: renders wallpapers headless on this machine's GPU"
+run = "cargo test"
+
+[tasks.check]
+description = "The gate before a commit: format, clippy with warnings as errors, the suite"
+run = ["cargo fmt --check", "cargo clippy --all-targets -- -D warnings", "cargo test"]
+
+[tasks.render]
+description = "One frame of a wallpaper to .out/NAME.png (mise run render -- rain)"
+run = 'mkdir -p .out && cargo run -q --release -- render "wallpapers/$1" ".out/$1.png" --size 1920x1080 --time 20'
+
+[tasks.run]
+description = "A wallpaper behind every output, until Ctrl-C (mise run run -- rain)"
+run = 'cargo run -q --release -- run "wallpapers/$1"'
+
+[tasks."build:steam"]
+description = "The binary Steam ships: linked against glibc 2.31, the Steam Linux Runtime 3 (sniper) floor"
+run = "cargo zigbuild --release --target x86_64-unknown-linux-gnu.2.31"
+
+[tasks."steam:check"]
+description = "Run the Steam build inside sniper: render a frame there, then the live layer for 5 s"
+depends = ["build:steam"]
+run = "scripts/steam-check.sh"

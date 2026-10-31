@@ -10,7 +10,9 @@ use smithay_client_toolkit::{
     registry_handlers,
     shell::{
         WaylandSurface,
-        wlr_layer::{Anchor, KeyboardInteractivity, Layer, LayerShell, LayerShellHandler, LayerSurface, LayerSurfaceConfigure},
+        wlr_layer::{
+            Anchor, KeyboardInteractivity, Layer, LayerShell, LayerShellHandler, LayerSurface, LayerSurfaceConfigure,
+        },
     },
 };
 use std::ptr::NonNull;
@@ -91,9 +93,19 @@ impl App {
             let (device, queue) = gpu::device(&adapter)?;
             let caps = surface.get_capabilities(&adapter);
             // a non-sRGB format: the shader's colours go to the screen as written, like a hex code
-            let format = caps.formats.iter().copied().find(|f| !f.is_srgb()).unwrap_or(caps.formats[0]);
+            let format = caps
+                .formats
+                .iter()
+                .copied()
+                .find(|f| !f.is_srgb())
+                .unwrap_or(caps.formats[0]);
             let renderer = Renderer::new(&device, &self.wp, format)?;
-            self.gpu = Some(Gpu { device, queue, format, renderer });
+            self.gpu = Some(Gpu {
+                device,
+                queue,
+                format,
+                renderer,
+            });
         }
         Ok(())
     }
@@ -137,7 +149,9 @@ impl App {
             return;
         }
         s.last = Some(now);
-        let (Some(g), Some(target)) = (&self.gpu, &s.target) else { return wl.commit() };
+        let (Some(g), Some(target)) = (&self.gpu, &s.target) else {
+            return wl.commit();
+        };
         let frame = match s.surface.get_current_texture() {
             wgpu::CurrentSurfaceTexture::Success(f) | wgpu::CurrentSurfaceTexture::Suboptimal(f) => f,
             other => {
@@ -148,7 +162,17 @@ impl App {
         let view = frame.texture.create_view(&Default::default());
         let mut enc = g.device.create_command_encoder(&Default::default());
         let res = [(s.size.0 * s.scale as u32) as f32, (s.size.1 * s.scale as u32) as f32];
-        g.renderer.draw(&g.queue, &mut enc, &view, target, Uniforms { res, time: (now - self.start).as_secs_f32(), seed: s.seed });
+        g.renderer.draw(
+            &g.queue,
+            &mut enc,
+            &view,
+            target,
+            Uniforms {
+                res,
+                time: (now - self.start).as_secs_f32(),
+                seed: s.seed,
+            },
+        );
         g.queue.submit([enc.finish()]);
         g.queue.present(frame);
     }
@@ -161,7 +185,9 @@ impl OutputHandler for App {
 
     fn new_output(&mut self, _: &Connection, qh: &QueueHandle<Self>, output: wl_output::WlOutput) {
         let wl = self.compositor.create_surface(qh);
-        let layer = self.layer_shell.create_layer_surface(qh, wl, Layer::Background, Some("aleph"), Some(&output));
+        let layer = self
+            .layer_shell
+            .create_layer_surface(qh, wl, Layer::Background, Some("aleph"), Some(&output));
         layer.set_anchor(Anchor::all());
         layer.set_exclusive_zone(-1);
         layer.set_keyboard_interactivity(KeyboardInteractivity::None);
@@ -171,17 +197,34 @@ impl OutputHandler for App {
             layer.wl_surface().set_input_region(Some(region.wl_region()));
         }
         layer.commit();
-        let display = RawDisplayHandle::Wayland(WaylandDisplayHandle::new(NonNull::new(self.conn.backend().display_ptr() as *mut _).unwrap()));
-        let window = RawWindowHandle::Wayland(WaylandWindowHandle::new(NonNull::new(layer.wl_surface().id().as_ptr() as *mut _).unwrap()));
+        let display = RawDisplayHandle::Wayland(WaylandDisplayHandle::new(
+            NonNull::new(self.conn.backend().display_ptr() as *mut _).unwrap(),
+        ));
+        let window = RawWindowHandle::Wayland(WaylandWindowHandle::new(
+            NonNull::new(layer.wl_surface().id().as_ptr() as *mut _).unwrap(),
+        ));
         let surface = match unsafe {
-            self.instance.create_surface_unsafe(wgpu::SurfaceTargetUnsafe::RawHandle { raw_display_handle: Some(display), raw_window_handle: window })
+            self.instance
+                .create_surface_unsafe(wgpu::SurfaceTargetUnsafe::RawHandle {
+                    raw_display_handle: Some(display),
+                    raw_window_handle: window,
+                })
         } {
             Ok(s) => s,
             Err(e) => return eprintln!("aleph: no GPU surface for an output: {e}"),
         };
         let scale = self.outputs.info(&output).map_or(1, |i| i.scale_factor);
         self.seeds += 1;
-        self.screens.push(Screen { output, surface, layer, target: None, size: (0, 0), scale, seed: self.seeds as f32 * 17.31, last: None });
+        self.screens.push(Screen {
+            output,
+            surface,
+            layer,
+            target: None,
+            size: (0, 0),
+            scale,
+            seed: self.seeds as f32 * 17.31,
+            last: None,
+        });
     }
 
     fn update_output(&mut self, _: &Connection, _: &QueueHandle<Self>, _: wl_output::WlOutput) {}
@@ -196,8 +239,17 @@ impl LayerShellHandler for App {
         self.screens.retain(|s| &s.layer != layer);
     }
 
-    fn configure(&mut self, _: &Connection, qh: &QueueHandle<Self>, layer: &LayerSurface, c: LayerSurfaceConfigure, _: u32) {
-        let Some(i) = self.screen(layer.wl_surface()) else { return };
+    fn configure(
+        &mut self,
+        _: &Connection,
+        qh: &QueueHandle<Self>,
+        layer: &LayerSurface,
+        c: LayerSurfaceConfigure,
+        _: u32,
+    ) {
+        let Some(i) = self.screen(layer.wl_surface()) else {
+            return;
+        };
         let first = self.screens[i].target.is_none();
         self.screens[i].size = (c.new_size.0.max(1), c.new_size.1.max(1));
         if let Err(e) = self.configure_surface(i) {
@@ -222,7 +274,14 @@ impl CompositorHandler for App {
         }
     }
 
-    fn transform_changed(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &wl_surface::WlSurface, _: wl_output::Transform) {}
+    fn transform_changed(
+        &mut self,
+        _: &Connection,
+        _: &QueueHandle<Self>,
+        _: &wl_surface::WlSurface,
+        _: wl_output::Transform,
+    ) {
+    }
 
     fn frame(&mut self, _: &Connection, qh: &QueueHandle<Self>, s: &wl_surface::WlSurface, _: u32) {
         if let Some(i) = self.screen(s) {
@@ -230,9 +289,23 @@ impl CompositorHandler for App {
         }
     }
 
-    fn surface_enter(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &wl_surface::WlSurface, _: &wl_output::WlOutput) {}
+    fn surface_enter(
+        &mut self,
+        _: &Connection,
+        _: &QueueHandle<Self>,
+        _: &wl_surface::WlSurface,
+        _: &wl_output::WlOutput,
+    ) {
+    }
 
-    fn surface_leave(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &wl_surface::WlSurface, _: &wl_output::WlOutput) {}
+    fn surface_leave(
+        &mut self,
+        _: &Connection,
+        _: &QueueHandle<Self>,
+        _: &wl_surface::WlSurface,
+        _: &wl_output::WlOutput,
+    ) {
+    }
 }
 
 delegate_registry!(App);

@@ -30,12 +30,20 @@ pub fn load(dir: &Path) -> Result<Wallpaper> {
     let text = std::fs::read_to_string(&toml_path).with_context(|| format!("reading {}", toml_path.display()))?;
     let m: Manifest = toml::from_str(&text).with_context(|| format!("parsing {}", toml_path.display()))?;
     if m.kind != "shader" {
-        bail!("{}: kind {:?} is not one aleph plays yet (only \"shader\")", toml_path.display(), m.kind);
+        bail!(
+            "{}: kind {:?} is not one aleph plays yet (only \"shader\")",
+            toml_path.display(),
+            m.kind
+        );
     }
-    if !(m.fps > 0.0) {
+    if m.fps.is_nan() || m.fps <= 0.0 {
         bail!("{}: fps must be above 0", toml_path.display());
     }
     let entry = dir.join(&m.entry);
     let own = std::fs::read_to_string(&entry).with_context(|| format!("reading {}", entry.display()))?;
-    Ok(Wallpaper { name: m.name, fps: m.fps, source: format!("{}\n{}", include_str!("preamble.wgsl"), own) })
+    Ok(Wallpaper {
+        name: m.name,
+        fps: m.fps,
+        source: format!("{}\n{}", include_str!("preamble.wgsl"), own),
+    })
 }

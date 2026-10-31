@@ -30,7 +30,10 @@ fn rain_draws_its_palette_on_black_the_same_every_time() {
     for p in a.chunks(4) {
         // within one unit of the hex: the GPU may round the f32 colour either way
         let near = |c: [u8; 3]| p[..3].iter().zip(c).all(|(x, y)| x.abs_diff(y) <= 1);
-        assert!(p[..3] == [0, 0, 0] || near(CYAN) || near(LILAC), "off-palette pixel {p:?}");
+        assert!(
+            p[..3] == [0, 0, 0] || near(CYAN) || near(LILAC),
+            "off-palette pixel {p:?}"
+        );
     }
 }
 
@@ -43,17 +46,28 @@ fn rain_moves_and_differs_per_output() {
 
 #[test]
 fn a_shader_that_does_not_compile_names_the_error() {
-    let dir = scratch("broken", &[
-        ("wallpaper.toml", "name = \"broken\"\nkind = \"shader\"\nentry = \"w.wgsl\"\n"),
-        ("w.wgsl", "fn wallpaper(px: vec2f) -> vec4f { return nope; }"),
-    ]);
-    let err = GPU.frame(&wallpaper::load(&dir).unwrap(), 16, 16, 0.0, 0.0).unwrap_err();
+    let dir = scratch(
+        "broken",
+        &[
+            (
+                "wallpaper.toml",
+                "name = \"broken\"\nkind = \"shader\"\nentry = \"w.wgsl\"\n",
+            ),
+            ("w.wgsl", "fn wallpaper(px: vec2f) -> vec4f { return nope; }"),
+        ],
+    );
+    let err = GPU
+        .frame(&wallpaper::load(&dir).unwrap(), 16, 16, 0.0, 0.0)
+        .unwrap_err();
     assert!(format!("{err:#}").contains("nope"), "{err:#}");
 }
 
 #[test]
 fn a_kind_aleph_cannot_play_is_refused_at_load() {
-    let dir = scratch("video", &[("wallpaper.toml", "name = \"v\"\nkind = \"video\"\nentry = \"v.mp4\"\n")]);
+    let dir = scratch(
+        "video",
+        &[("wallpaper.toml", "name = \"v\"\nkind = \"video\"\nentry = \"v.mp4\"\n")],
+    );
     let err = wallpaper::load(&dir).err().expect("a video manifest must not load yet");
     assert!(format!("{err:#}").contains("\"video\""), "{err:#}");
 }
